@@ -1,53 +1,43 @@
-from datetime import datetime
 from typing import Annotated
 
 import bcrypt
+import jwt
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
-from pydantic import BaseModel, ConfigDict, EmailStr
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from classes import Editarnota, NotaIn, NotaOut, UsuarioIn, UsuarioOut
 from database import Nota, Usuario, get_session
+from seguridad import SECRET, crear_token
 
 SessionDep = Annotated[Session, Depends(get_session)]
 app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# hashear:  pwd_context.hash(password)
-# verificar: pwd_context.verify(plano, hash)   ← para el login, mañana
 
 
-class UsuarioIn(BaseModel):
-    email: EmailStr
-    password: str
+security = HTTPBearer()
 
 
-class UsuarioOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    email: EmailStr
+def get_current_user(
+    credenciales: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    session: SessionDep,
+) -> Usuario:
+    try:
+        payload = jwt.decode(credenciales.credentials, SECRET, algorithms=["HS256"])
+        usuario_id = int(payload["sub"])
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    usuario = session.scalars(select(Usuario).where(Usuario.id == usuario_id)).first()
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    return usuario
 
 
-class Editarnota(BaseModel):
-    titulo: str | None = None
-    nota: str | None = None
-
-
-class Crearnota(BaseModel):
-    titulo: str
-    nota: str
-
-
-class NotaOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    titulo: str
-    nota: str
-    usuario_id: int
-    creation_date: datetime
-    modification_date: datetime
+UsuarioActual = Annotated[Usuario, Depends(get_current_user)]
 
 
 def hashear(password: str) -> str:
@@ -75,27 +65,12 @@ def registro_usuario(datos: UsuarioIn, session: SessionDep) -> Usuario:
     return usuario
 
 
-@app.get("/notas")
-def notas_list(session: SessionDep) -> list[NotaOut]:
-    """Lista todas las notas desde SQLite."""
-    notas = session.scalars(select(Nota)).all()
-    return [NotaOut.model_validate(n) for n in notas]
-
-
-class NotaIn(BaseModel):
-    titulo: str
-    nota: str
-
-
-USUARIO_TEMPORAL = 1  # TODO: reemplazar por el usuario del token (Fase 3c)
-
-
 @app.post("/notas", status_code=201, response_model=NotaOut)
-def crear_nota(datos: NotaIn, session: SessionDep) -> Nota:
+def crear_nota(usuario: UsuarioActual, datos: NotaIn, session: SessionDep) -> Nota:
     nota = Nota(
         titulo=datos.titulo,
         nota=datos.nota,
-        usuario_id=USUARIO_TEMPORAL,
+        usuario_id=usuario.id,
     )
     session.add(nota)
     session.commit()
@@ -103,32 +78,69 @@ def crear_nota(datos: NotaIn, session: SessionDep) -> Nota:
     return nota
 
 
+@app.post("/auth/login", status_code=200)
+def autentificacion_usuario(datos: UsuarioIn, session: SessionDep):
+    consulta_usuario = select(Usuario).where(Usuario.email == datos.email)
+    usuario = session.scalars(consulta_usuario).first()
+    if usuario is None or not verificar(datos.password, usuario.hashed_password):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+    return {"access_token": crear_token(usuario.id), "token_type": "bearer"}
+
+
 @app.delete("/notas/{id}", status_code=204)
-def eliminar_nota(id: int, session: SessionDep) -> None:
-    """Una funcion que elimina una nota
-    Creamos una lista nueva dejando afuera la nota
-    que deseamos borrar."""
+def eliminar_nota(usuario: UsuarioActual, id: int, session: SessionDep) -> None:
     consulta = select(Nota).where(Nota.id == id)
     nota = session.scalars(consulta).first()
     if nota is None:
         raise HTTPException(status_code=404, detail="Nota no encontrada")
+    if nota.usuario_id != usuario.id:
+        raise HTTPException(status_code=403, detail="No autorizado")
     session.delete(nota)
     session.commit()
 
 
 @app.patch("/notas/{id}", response_model=NotaOut)
-def editar_notas(id: int, datos: Editarnota, session: SessionDep) -> Nota:
+def editar_notas(
+    usuario: UsuarioActual, id: int, datos: Editarnota, session: SessionDep
+) -> Nota:
     """Una función que actualiza parcialmente una nota existente.
     Solo modifica los campos que no sean None en el body."""
     consulta = select(Nota).where(Nota.id == id)
     nota = session.scalars(consulta).first()
+
     if nota is None:
         raise HTTPException(status_code=404, detail="Nota no encontrada")
+    if nota.usuario_id != usuario.id:
+        raise HTTPException(status_code=403, detail="No autorizado")
     if datos.titulo is not None:
-        "aqui como se que tengo que actualizar con lo que me llego ? "
         nota.titulo = datos.titulo
     if datos.nota is not None:
         nota.nota = datos.nota
     session.commit()
     session.refresh(nota)
     return nota
+
+
+@app.get("/auth/me", response_model=UsuarioOut)
+def leer_usuario_actual(usuario: UsuarioActual) -> Usuario:
+    return usuario
+
+
+@app.get("/notas/{id}", response_model=NotaOut)
+def mostrar_nota(usuario: UsuarioActual, id: int, session: SessionDep):
+    consulta = select(Nota).where(Nota.id == id)
+    nota = session.scalars(consulta).first()
+
+    if nota is None:
+        raise HTTPException(status_code=404, detail="Nota no encontrada")
+    if nota.usuario_id != usuario.id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    return nota
+
+
+@app.get("/notas")
+def notas_list(usuario: UsuarioActual, session: SessionDep) -> list[NotaOut]:
+    """Lista todas las notas desde SQLite."""
+    consulta = select(Nota).where(Nota.usuario_id == usuario.id)
+    notas = session.scalars(consulta).all()
+    return [NotaOut.model_validate(n) for n in notas]
