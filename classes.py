@@ -38,3 +38,13 @@ class NotaOut(BaseModel):
 class NotaIn(BaseModel):
     titulo: str
     nota: str
+
+
+class NotaListItem(BaseModel):
+    """Metadatos de la nota para el listado paginado (sin contenido)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    titulo: str
+    modification_date: datetime

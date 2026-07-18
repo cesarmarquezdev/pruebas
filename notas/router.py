@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from classes import Editarnota, NotaIn, NotaOut
+from classes import Editarnota, NotaIn, NotaListItem, NotaOut
 from database import Nota
 from deps import SessionDep, UsuarioActual
 
@@ -68,8 +68,18 @@ def mostrar_nota(usuario: UsuarioActual, id: int, session: SessionDep):
 
 
 @router.get("")
-def notas_list(usuario: UsuarioActual, session: SessionDep) -> list[NotaOut]:
-    """Lista todas las notas desde SQLite."""
-    consulta = select(Nota).where(Nota.usuario_id == usuario.id)
+def notas_list(
+    usuario: UsuarioActual,
+    session: SessionDep,
+    skip: int = 0,
+    limit: int = 20,
+) -> list[NotaListItem]:
+    """Lista paginada de las notas del usuario (solo metadatos, sin contenido)."""
+    consulta = (
+        select(Nota)
+        .where(Nota.usuario_id == usuario.id)
+        .offset(skip)
+        .limit(limit)
+    )
     notas = session.scalars(consulta).all()
-    return [NotaOut.model_validate(n) for n in notas]
+    return [NotaListItem.model_validate(n) for n in notas]
