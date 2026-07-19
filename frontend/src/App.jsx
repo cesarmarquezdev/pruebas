@@ -1,11 +1,33 @@
 import { useState } from "react";
+import { useEffect } from "react";
 
 function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [modo, setModo] = useState("login");
+  const [notas, setNotas] = useState([]);
+  const [nuevoTitulo, setNuevoTitulo] = useState("");
+  const [nuevaNota, setNuevaNota] = useState("");
 
+  useEffect(() => {
+    if (token) {
+      api("/notas").then(data => {
+        if (data) setNotas(data);
+      });
+    }
+
+  }, [token]);
+  function crearNota(e) {
+    e.preventDefault();
+    api("/notas", "POST", { titulo: nuevoTitulo, nota: nuevaNota }).then(data => {
+      if (data) {
+        setNotas([...notas, data]);   // agrega la nueva a la lista existente
+        setNuevoTitulo("");
+        setNuevaNota("");
+      }
+    });
+  }
   function handleSubmit(e) {
     e.preventDefault();
 
@@ -40,8 +62,34 @@ function App() {
         localStorage.removeItem("token");
         setToken(null);
       }}>Cerrar sesión</button>
+      <ul>
+        {notas.map(n => <li key={n.id}>{n.titulo + " — " + n.modification_date}</li>)}
+      </ul>
+      <form onSubmit={crearNota}>
+        <input value={nuevoTitulo} onChange={e => setNuevoTitulo(e.target.value)} placeholder="título" />
+        <input value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="nota" />
+        <button>Crear</button>
+      </form>
+
     </div>
   )
+  function api(ruta, metodo = "GET", body = null) {
+    return fetch("http://127.0.0.1:8000" + ruta, {
+      method: metodo,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token
+      },
+      body: body ? JSON.stringify(body) : null,
+    }).then(r => {
+      if (r.status === 401) {
+        localStorage.removeItem("token");
+        setToken(null);
+        return null;
+      }
+      return r.json();
+    })
+  }
   return (
     <form onSubmit={handleSubmit}>
       {/* Tu botón de cambiar modo que está perfecto */}
