@@ -18,6 +18,7 @@ function App() {
     }
 
   }, [token]);
+
   function crearNota(e) {
     e.preventDefault();
     api("/notas", "POST", { titulo: nuevoTitulo, nota: nuevaNota }).then(data => {
@@ -28,6 +29,14 @@ function App() {
       }
     });
   }
+  function borrarNota(id) {
+    api(`/notas/${id}`, "DELETE").then(data => {
+      if (data) {
+        setNotas(notas.filter(n => n.id !== id));
+      }
+    });
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
 
@@ -63,13 +72,16 @@ function App() {
         setToken(null);
       }}>Cerrar sesión</button>
       <ul>
-        {notas.map(n => <li key={n.id}>{n.titulo + " — " + n.modification_date}</li>)}
+        {notas.map(n => <li key={n.id}>{n.titulo + " — " + n.modification_date}
+          <button onClick={() => borrarNota(n.id)}>Borrar</button>
+        </li>)}
       </ul>
       <form onSubmit={crearNota}>
         <input value={nuevoTitulo} onChange={e => setNuevoTitulo(e.target.value)} placeholder="título" />
         <input value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="nota" />
         <button>Crear</button>
       </form>
+
 
     </div>
   )
@@ -86,6 +98,9 @@ function App() {
         localStorage.removeItem("token");
         setToken(null);
         return null;
+      }
+      if (r.status === 204) {
+        return true;
       }
       return r.json();
     })
