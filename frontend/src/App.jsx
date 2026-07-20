@@ -9,6 +9,9 @@ function App() {
   const [notas, setNotas] = useState([]);
   const [nuevoTitulo, setNuevoTitulo] = useState("");
   const [nuevaNota, setNuevaNota] = useState("");
+  const [editarTitulo, setEditarTitulo] = useState("");
+  const [editarNota, setEditarNota] = useState("");
+  const [editarNotaid, setEditarNotaid] = useState("");
 
   useEffect(() => {
     if (token) {
@@ -18,6 +21,14 @@ function App() {
     }
 
   }, [token]);
+
+
+  function empezarEditar(nota) {
+    setEditarNotaid(nota.id);
+    setEditarTitulo(nota.titulo);
+    setEditarNota(nota.nota);
+  }
+
 
   function crearNota(e) {
     e.preventDefault();
@@ -33,6 +44,15 @@ function App() {
     api(`/notas/${id}`, "DELETE").then(data => {
       if (data) {
         setNotas(notas.filter(n => n.id !== id));
+      }
+    });
+  }
+  function guardarEdicion(e) {
+    e.preventDefault();
+    api(`/notas/${editarNotaid}`, "PATCH", { titulo: editarTitulo, nota: editarNota }).then(data => {
+      if (data) {
+        setNotas(notas.map(n => n.id === editarNotaid ? data : n));
+        setEditarNotaid("");
       }
     });
   }
@@ -72,9 +92,23 @@ function App() {
         setToken(null);
       }}>Cerrar sesión</button>
       <ul>
-        {notas.map(n => <li key={n.id}>{n.titulo + " — " + n.modification_date}
-          <button onClick={() => borrarNota(n.id)}>Borrar</button>
-        </li>)}
+        {notas.map(n => (
+          <li key={n.id}>
+            {n.id === editarNotaid ? (
+              <form onSubmit={guardarEdicion}>
+                <input value={editarTitulo} onChange={e => setEditarTitulo(e.target.value)} />
+                <input value={editarNota} onChange={e => setEditarNota(e.target.value)} />
+                <button>Guardar</button>
+              </form>
+            ) : (
+              <>
+                {n.titulo + " — " + n.modification_date}
+                <button onClick={() => empezarEditar(n)}>Editar</button>
+                <button onClick={() => borrarNota(n.id)}>Borrar</button>
+              </>
+            )}
+          </li>
+        ))}
       </ul>
       <form onSubmit={crearNota}>
         <input value={nuevoTitulo} onChange={e => setNuevoTitulo(e.target.value)} placeholder="título" />
