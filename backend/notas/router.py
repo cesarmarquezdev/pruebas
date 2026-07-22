@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from classes import Editarnota, NotaIn, NotaListItem, NotaOut
+from schemas import Editarnota, NotaIn, NotaListItem, NotaOut
 from database import Nota
 from deps import SessionDep, UsuarioActual
 
@@ -21,6 +21,7 @@ def crear_nota(usuario: UsuarioActual, datos: NotaIn, session: SessionDep) -> No
     return nota
 
 
+# "/notas/{id}" , "Delete"
 @router.delete("/{id}", status_code=204)
 def eliminar_nota(usuario: UsuarioActual, id: int, session: SessionDep) -> None:
     consulta = select(Nota).where(Nota.id == id)
@@ -76,10 +77,7 @@ def notas_list(
 ) -> list[NotaListItem]:
     """Lista paginada de las notas del usuario (solo metadatos, sin contenido)."""
     consulta = (
-        select(Nota)
-        .where(Nota.usuario_id == usuario.id)
-        .offset(skip)
-        .limit(limit)
+        select(Nota).where(Nota.usuario_id == usuario.id).offset(skip).limit(limit)
     )
     notas = session.scalars(consulta).all()
     return [NotaListItem.model_validate(n) for n in notas]

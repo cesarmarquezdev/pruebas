@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from classes import UsuarioIn, UsuarioOut
+from schemas import UsuarioIn, UsuarioOut
 from database import Usuario
 from deps import SessionDep, UsuarioActual
 from seguridad import crear_token
