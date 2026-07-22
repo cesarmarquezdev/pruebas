@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 
 function App() {
   const [email, setEmail] = useState("");
@@ -12,7 +13,7 @@ function App() {
   const [editarTitulo, setEditarTitulo] = useState("");
   const [editarNota, setEditarNota] = useState("");
   const [editarNotaid, setEditarNotaid] = useState("");
-
+  const [vistaNota, setVistaNota] = useState("")
   useEffect(() => {
     if (token) {
       api("/notas").then(data => {
@@ -22,7 +23,14 @@ function App() {
 
   }, [token]);
 
-
+  function verNota(id) {
+    api(`/notas/${id}`).then(data => {
+      if (data) {
+        setVistaNota(data)
+          ;
+      }
+    });
+  }
   function empezarEditar(nota) {
     setEditarNotaid(nota.id);
     setEditarTitulo(nota.titulo);
@@ -102,14 +110,20 @@ function App() {
               </form>
             ) : (
               <>
-                {n.titulo + " — " + n.modification_date}
+                <span onClick={() => verNota(n.id)}>{n.titulo + " — " + n.modification_date}</span>
                 <button onClick={() => empezarEditar(n)}>Editar</button>
                 <button onClick={() => borrarNota(n.id)}>Borrar</button>
               </>
             )}
           </li>
         ))}
-      </ul>
+      </ul>{vistaNota && (
+        <div>
+          <h2>{vistaNota.titulo}</h2>
+          <ReactMarkdown>{vistaNota.nota}</ReactMarkdown>
+          <button onClick={() => setVistaNota("")}>Cerrar</button>
+        </div>
+      )}
       <form onSubmit={crearNota}>
         <input value={nuevoTitulo} onChange={e => setNuevoTitulo(e.target.value)} placeholder="título" />
         <input value={nuevaNota} onChange={e => setNuevaNota(e.target.value)} placeholder="nota" />
