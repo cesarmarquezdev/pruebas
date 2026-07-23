@@ -1,26 +1,13 @@
+import os
 from collections.abc import Generator
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, create_engine, event, func
-from sqlalchemy.engine import Engine
+from dotenv import load_dotenv
+from sqlalchemy import DateTime, ForeignKey, String, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-# --- 1. ACTIVAR FOREIGN KEYS EN SQLITE ---
-
-# Este bloque intercepta cada conexión a SQLite y le dice al guardia que despierte.
-
-
-@event.listens_for(Engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-
-    cursor = dbapi_connection.cursor()
-
-    cursor.execute("PRAGMA foreign_keys=ON")
-
-    cursor.close()
-
-
-# --- 2. DECLARACIÓN DE MODELOS ---
+load_dotenv()
+URL = os.getenv("DATABASE_URL", "postgresql+psycopg://notas:notas@localhost:5432/notas")
 
 
 class Base(DeclarativeBase):
@@ -59,7 +46,7 @@ class Nota(Base):
 
 # --- 3. CONFIGURACIÓN E INICIALIZACIÓN ---
 
-engine = create_engine("sqlite:///notas.db", echo=True)
+engine = create_engine(URL, echo=True)
 
 Base.metadata.create_all(bind=engine)
 

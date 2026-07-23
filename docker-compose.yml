@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: notas
+      POSTGRES_PASSWORD: notas
+      POSTGRES_DB: notas
+    ports:
+      - "5432:5432"
+    volumes:
+      - notas_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U notas" ]
+      interval: 2s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://notas:notas@db:5432/notas
+      JWT_SECRET: 8c403f52e89e64bf723c7a8d1cd1cdc68fa9662057af62367d92956be233e65a
+      JWT_EXPIRE_MINUTES: 30
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  notas_pgdata:
